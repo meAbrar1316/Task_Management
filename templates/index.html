@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/css/bootstrap.min.css">
+    <title>Task Manager</title>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Welcome to the Task Manager</h1>
+        <hr/>
+
+        <!-- Check if the user is not logged in -->
+        <script>
+            const token = localStorage.getItem('token');
+            if (!token) {
+                document.write(`
+                    <h2>Login</h2>
+                    <form id="loginForm">
+                        <div class="form-group">
+                            <label for="username">Username:</label>
+                            <input type="text" id="username" name="username" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Password:</label>
+                            <input type="password" id="password" name="password" class="form-control" required>
+                        </div>
+                        <br/>
+                        <button type="button" class="btn btn-primary" onclick="login()">Login</button>
+                    </form>
+                    <small>Test User: testuser, Password: testpassword</small>
+                `);
+            } else {
+                document.write(`
+                    <div style="text-align: right;">
+                        <button class="btn btn-danger" onclick="logout()">Logout</button>
+                    </div>
+                `);
+            }
+        </script>
+
+        <hr/>
+
+        <h2>Tasks</h2>
+        <table id="tasksList" class="table table-striped"></table>
+
+        <h2>Add Task</h2>
+        <form id="taskForm">
+            <div class="form-group">
+                <label for="taskTitle">Title:</label>
+                <input type="text" id="taskTitle" name="taskTitle" class="form-control" aria-describedby="emailHelp" placeholder="Enter Title" required>
+            </div>
+            <div class="form-group">
+                <label for="taskDescription">Description:</label>
+                <input type="text" id="taskDescription" name="taskDescription" class="form-control" placeholder="Description" required>
+            </div>
+            <!-- Hidden input field to store the task ID for editing -->
+            <input type="hidden" id="taskId" value="">
+            <br/>
+            <button type="submit" class="btn btn-primary">Save Task</button>
+        </form>
+    </div>
+
+    <script>
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            // Send a POST request to the /login route with the provided credentials
+            fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    username: username,
+                    password: password,
+                }),
+            })
+                .then(response => response.json())
+                .then(data => {
+                    // Store the JWT token in localStorage for future requests
+                    if (data.access_token){
+                        localStorage.setItem('token', data.access_token);
+                        // Fetch and display tasks after successful login
+                        location.reload();
+                        fetchTasks();
+                    }
+                    else{
+                        alert("Invalid credentials")
+                    }
+                    
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        (function(){
+            const token = localStorage.getItem('token');
+            if(token) fetchTasks();
+        }());
+
+        // add or update task
+        function saveTask(taskId = null) {
+            const title = document.getElementById('taskTitle').value;
+            const description = document.getElementById('taskDescription').value;
+            if(taskId) document.getElementById('taskTitle').focus()
+
+            // Determine whether to send a POST or PUT request based on the presence of a taskId
+            const method = taskId ? 'PUT' : 'POST';
+            const url = taskId ? `/tasks/${taskId}` : '/tasks';
+
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + localStorage.getItem('token'),
+                },
+                body: JSON.stringify({
+                    title: title,
+                    description: description,
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Fetch and display updated tasks after adding or editing a task
+                fetchTasks();
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        // List all tasks
+        function fetchTasks() {
+            const tasksList = document.getElementById('tasksList');
+            
+            // Clear existing rows in the table
+            while (tasksList.rows.length > 0) {
+                tasksList.deleteRow(0);
+            }
+
+            fetch('/tasks', {
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token'),
+                },
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    data.tasks.forEach(task => {
+                        const tr = tasksList.insertRow();
+
+                        const btn = document.createElement("button");
+                        btn.innerText = 'Delete';
+
+                        const updateBtn = document.createElement("button");
+                        updateBtn.innerText = 'Edit';
+
+                        tr.insertCell(0).appendChild(document.createTextNode(task.id));
+                        tr.insertCell(1).appendChild(document.createTextNode(task.title));
+                        tr.insertCell(2).appendChild(document.createTextNode(task.description));
+                        const deleteCell = tr.insertCell(3);
+                        deleteCell.appendChild(btn);
+                        btn.onclick = () => { deleteTask(task.id) };
+
+                        const updateCell = tr.insertCell(4);
+                        updateCell.appendChild(updateBtn);
+                        updateBtn.onclick = () => { populateFormWithTask(task.id) };
+                    });
+                })
+                .catch(error => console.error('Error fetching tasks:', error));
+        }
+
+        function deleteTask(id){
+            let text = "Do you want to delete the task?";
+            if (confirm(text) == true) {
+                    fetch(`/tasks/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('token'),
+                    },
+                })
+                .then(response => response.json())
+                    .then(data => {
+                        // Fetch and display updated tasks after adding a new task
+                        fetchTasks();
+                })
+                .catch(error => console.error('Error:', error));
+            }
+        }
+
+        // Function to populate form with existing task values
+        function populateFormWithTask(taskId) {
+
+            const x = document.getElementById('taskId').setAttribute('value', taskId);
+            console.log(x)
+
+            fetch(`/tasks/${taskId}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('token'),
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Populate form fields with existing task values
+                document.getElementById('taskTitle').value = data.title;
+                document.getElementById('taskDescription').value = data.description;
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        // Attach the saveTask function to the form submit event
+        document.getElementById('taskForm').addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent the default form submission behavior
+
+            // Extract the task ID from the hidden input field
+            const taskId = document.getElementById('taskId').value;
+
+            // Call the saveTask function with the extracted task ID
+            saveTask(taskId);
+        });
+
+        // Logout
+        function logout() {
+            // Clear the token from localStorage to log out the user
+            localStorage.removeItem('token');
+            // Reload the page or perform any other actions you need
+            location.reload();
+        }
+    </script>
+    <!-- JavaScript Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
