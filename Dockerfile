@@ -1,3 +1,31 @@
+# Use Ubuntu as the base image
+FROM ubuntu:latest
+
+# Set environment variables to avoid interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Update package lists and install necessary packages
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy application files
+COPY . /app
+
+# Install required Python packages
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Expose the port your app runs on
+EXPOSE 8001
+
+# Command to run your application
+CMD ["python3", "app.py"]
+
+
 # # First stage: Use Ubuntu for building Python environment
 # FROM ubuntu:latest AS builder
 
@@ -42,29 +70,3 @@
 # CMD ["python", "app.py"]
 
 
-# Use Ubuntu as the base image
-FROM ubuntu:latest
-
-# Set environment variables to avoid interactive prompts
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Update package lists and install necessary packages
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set working directory
-WORKDIR /app
-
-# Copy application files
-COPY . /app
-
-# Install required Python packages
-RUN pip3 install --no-cache-dir -r requirements.txt
-
-# Expose the port your app runs on
-EXPOSE 8001
-
-# Command to run your application
-CMD ["python3", "app.py"]
